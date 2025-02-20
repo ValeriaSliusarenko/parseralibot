@@ -18,9 +18,13 @@ from data import (
     save_shopify_csv_list_items,
 )
 from hosting import upload_photos
+from dotenv import load_dotenv
+
+# Завантаження змінних середовища
+load_dotenv()
 
 headers = {
-    "x-rapidapi-key": "e5839d12demshddb4a0b11511997p19bd9ejsn5a593ae269ce",
+    "x-rapidapi-key": os.getenv('RAPID_API_KEY'),
     "x-rapidapi-host": "aliexpress-datahub.p.rapidapi.com",
 }
 

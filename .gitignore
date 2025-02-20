@@ -172,3 +172,24 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 .idea
+
+# Virtual Environment
+venv/
+ENV/
+
+# Environment Variables
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Local files
+list_items/
+*.json
+*.csv

@@ -3,18 +3,21 @@ import logging
 import cloudinary
 import cloudinary.uploader
 from cloudinary.exceptions import Error as CloudinaryError
+from dotenv import load_dotenv
+
+# Завантаження змінних середовища
+load_dotenv()
 
 # Налаштування логування
 logger = logging.getLogger(__name__)
 
-# Налаштування Cloudinary
+# Налаштування Cloudinary з змінних середовища
 # https://console.cloudinary.com/settings/c-6f5534e46e74f613fa802f99963078/api-keys
 
-
 cloudinary.config(
-    cloud_name= 'dtvxnruxj',
-    api_key= '932412845955356',
-    api_secret= 'O0z4A7hR3wQFgCYSu7J_o2MX71k',
+    cloud_name=os.getenv('CLOUD_NAME'),
+    api_key=os.getenv('API_KEY'),
+    api_secret=os.getenv('API_SECRET'),
     secure=True
 )
 
