@@ -12,9 +12,9 @@ logger = logging.getLogger(__name__)
 
 
 cloudinary.config(
-    cloud_name= 'dnghh41px',
-    api_key= '884367949269729',
-    api_secret= 'IzJSTpOFNIhWYCC8Lm5bDnWbYJs',
+    cloud_name= 'dtvxnruxj',
+    api_key= '932412845955356',
+    api_secret= 'O0z4A7hR3wQFgCYSu7J_o2MX71k',
     secure=True
 )
 
