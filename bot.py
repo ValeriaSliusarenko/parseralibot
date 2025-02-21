@@ -222,11 +222,61 @@ async def start_parsing_process(message: types.Message, state: FSMContext):
                     await update_status(f"✅ Товар {idx} успішно оброблено")
             
             if items_data:
-                # Зберігаємо дані в state
+                # Змінюємо формат збереження Shopify даних
+                shopify_df = pd.DataFrame()
+                for item in shopify_list:
+                    # Створюємо новий рядок для кожного товару
+                    main_row = pd.DataFrame([{
+                        'Handle': item[0]['Handle'],
+                        'Title': item[0]['Title'],
+                        'Body (HTML)': item[0]['Body (HTML)'],
+                        'Vendor': item[0]['Vendor'],
+                        'Product Category': item[0]['Product Category'],
+                        'Type': item[0]['Type'],
+                        'Tags': item[0]['Tags'],
+                        'Published': item[0]['Published'],
+                        'Option1 Name': item[0]['Option1 Name'],
+                        'Option1 Value': item[0]['Option1 Value'],
+                        'Option2 Name': item[0]['Option2 Name'],
+                        'Option2 Value': item[0]['Option2 Value'],
+                        'Option3 Name': item[0]['Option3 Name'],
+                        'Option3 Value': item[0]['Option3 Value'],
+                        'Variant SKU': item[0]['Variant SKU'],
+                        'Variant Grams': item[0]['Variant Grams'],
+                        'Variant Inventory Tracker': item[0]['Variant Inventory Tracker'],
+                        'Variant Inventory Qty': item[0]['Variant Inventory Qty'],
+                        'Variant Inventory Policy': item[0]['Variant Inventory Policy'],
+                        'Variant Fulfillment Service': item[0]['Variant Fulfillment Service'],
+                        'Variant Price': item[0]['Variant Price'],
+                        'Variant Compare At Price': item[0]['Variant Compare At Price'],
+                        'Variant Requires Shipping': item[0]['Variant Requires Shipping'],
+                        'Variant Taxable': item[0]['Variant Taxable'],
+                        'Variant Barcode': item[0]['Variant Barcode'],
+                        'Image Src': item[0]['Image Src'],
+                        'Image Position': '1',
+                        'Image Alt Text': '',
+                        'Gift Card': 'FALSE',
+                        'SEO Title': '',
+                        'SEO Description': '',
+                        'Status': 'draft'
+                    }])
+                    
+                    # Додаємо додаткові рядки для інших зображень
+                    for i in range(1, len(item)):
+                        image_row = pd.DataFrame([{
+                            'Handle': item[i]['Handle'],
+                            'Image Src': item[i]['Image Src'],
+                            'Image Position': str(i + 1)
+                        }])
+                        main_row = pd.concat([main_row, image_row], ignore_index=True)
+                    
+                    shopify_df = pd.concat([shopify_df, main_row], ignore_index=True)
+                
+                # Зберігаємо правильно відформатовані дані
                 await state.update_data({
                     'json_data': json.dumps(items_data, ensure_ascii=False, indent=2),
                     'csv_data': pd.DataFrame(items_data).to_csv(index=False),
-                    'shopify_data': pd.DataFrame(shopify_list).to_csv(index=False),
+                    'shopify_data': shopify_df.to_csv(index=False),
                     'item_id': 'query_result'
                 })
 
