@@ -348,3 +348,4 @@ def prepare_shopify_csv(items: list[dict] | dict) -> str:
     except Exception as e:
         print(f"Помилка при підготовці Shopify CSV: {e}")
         return ""
+
