@@ -144,7 +144,6 @@ async def start_parsing_process(message: types.Message, state: FSMContext):
     link = data['link']
     limit = data.get('limit', 1)
     
-    # Створюємо початкове повідомлення
     status_message = await message.answer("🚀 Починаємо парсинг...")
     logs = []
     
@@ -174,32 +173,17 @@ async def start_parsing_process(message: types.Message, state: FSMContext):
             item_dict = get_item_info(item_data)
             
             await update_status("📸 Завантаження фотографій...")
-            main_photos_url = upload_photos(item_dict["MainPhotoLinks"], f"{item_id}/MainPhotos")
+            try:
+                uploaded_urls = upload_photos(item_dict)
+                item_dict["MainPhotoLinks"] = uploaded_urls.get("MainPhotos", [])
+                item_dict["ReviewsPhotoLinks"] = uploaded_urls.get("PhotoReviews", [])
+            except Exception as e:
+                logging.error(f"Помилка завантаження фото: {e}")
+                await status_message.edit_text("❌ Помилка при завантаженні фотографій")
+                return
             
             await update_status("🛍️ Підготовка даних для Shopify...")
-            shopify_info = get_shopify_one_item(item_dict, main_photos_url)
-            
-            # Зберігаємо дані в state
-            await state.update_data({
-                'json_data': json.dumps(item_dict, ensure_ascii=False, indent=2),
-                'csv_data': [item_dict],  # Зберігаємо як список словників
-                'shopify_data': shopify_info,  # Зберігаємо як список словників
-                'item_id': item_id
-            })
-
-            # Створюємо клавіатуру для завантаження
-            download_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="📥 Завантажити JSON", callback_data="download_json")],
-                [InlineKeyboardButton(text="📥 Завантажити CSV", callback_data="download_csv")],
-                [InlineKeyboardButton(text="📥 Завантажити Shopify CSV", callback_data="download_shopify")],
-                [InlineKeyboardButton(text="🔄 Новий парсинг", callback_data="new_parsing")]
-            ])
-
-            # Оновлюємо повідомлення з клавіатурою
-            await status_message.edit_text(
-                "✅ Парсинг завершено! Оберіть формат для завантаження:",
-                reply_markup=download_keyboard
-            )
+            shopify_info = get_shopify_one_item(item_dict, uploaded_urls["MainPhotos"])
 
         elif mode == "query":
             await update_status(f"⚙️ Парсинг товарів за запитом (ліміт: {limit})...")
@@ -217,41 +201,13 @@ async def start_parsing_process(message: types.Message, state: FSMContext):
                 item_data = await parse_item(headers, item_id)
                 if item_data:
                     item_dict = get_item_info(item_data)
+                    uploaded_urls = upload_photos(item_dict)
+                    item_dict["MainPhotoLinks"] = uploaded_urls.get("MainPhotos", [])
+                    item_dict["ReviewsPhotoLinks"] = uploaded_urls.get("PhotoReviews", [])
                     items_data.append(item_dict)
-                    main_photos_url = upload_photos(item_dict["MainPhotoLinks"], f"{item_id}/MainPhotos")
-                    shopify_info = get_shopify_one_item(item_dict, main_photos_url)
+                    shopify_info = get_shopify_one_item(item_dict, uploaded_urls["MainPhotos"])
                     shopify_list.append(shopify_info)
                     await update_status(f"✅ Товар {idx} успішно оброблено")
-            
-            if items_data:
-                # Підготовка даних для Shopify
-                all_shopify_items = []
-                for idx, item in enumerate(shopify_list, 1):
-                    for row in item:
-                        row["Handle"] = str(idx)  # Оновлюємо Handle для кожного товару
-                        all_shopify_items.append(row)
-                
-                # Зберігаємо дані
-                await state.update_data({
-                    'json_data': json.dumps(items_data, ensure_ascii=False, indent=2),
-                    'csv_data': items_data,  # Зберігаємо як список словників
-                    'shopify_data': shopify_list,  # Зберігаємо як список словників
-                    'item_id': 'query_result'
-                })
-
-                # Створюємо клавіатуру для завантаження
-                download_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="📥 Завантажити JSON", callback_data="download_json")],
-                    [InlineKeyboardButton(text="📥 Завантажити CSV", callback_data="download_csv")],
-                    [InlineKeyboardButton(text="📥 Завантажити Shopify CSV", callback_data="download_shopify")],
-                    [InlineKeyboardButton(text="🔄 Новий парсинг", callback_data="new_parsing")]
-                ])
-
-                # Оновлюємо повідомлення з клавіатурою
-                await status_message.edit_text(
-                    "✅ Парсинг завершено! Оберіть формат для завантаження:",
-                    reply_markup=download_keyboard
-                )
 
         elif mode == "multiple":
             links_list = [l.strip() for l in link.split(",") if l.strip()]
@@ -276,42 +232,51 @@ async def start_parsing_process(message: types.Message, state: FSMContext):
                     continue
                 
                 item_dict = get_item_info(item_data)
+                uploaded_urls = upload_photos(item_dict)
+                item_dict["MainPhotoLinks"] = uploaded_urls.get("MainPhotos", [])
+                item_dict["ReviewsPhotoLinks"] = uploaded_urls.get("PhotoReviews", [])
                 items_data.append(item_dict)
-                
-                main_photos_url = upload_photos(item_dict["MainPhotoLinks"], f"{item_id}/MainPhotos")
-                shopify_info = get_shopify_one_item(item_dict, main_photos_url)
+                shopify_info = get_shopify_one_item(item_dict, uploaded_urls["MainPhotos"])
                 shopify_list.append(shopify_info)
-                
                 await update_status(f"✅ Товар {idx} успішно оброблено")
-            
-            if items_data:
-                # Зберігаємо дані в state
-                await state.update_data({
-                    'json_data': json.dumps(items_data, ensure_ascii=False, indent=2),
-                    'csv_data': items_data,  # Зберігаємо як список словників
-                    'shopify_data': shopify_list,  # Зберігаємо як список словників
-                    'item_id': 'multiple_result'
-                })
 
-                # Створюємо клавіатуру для завантаження
-                download_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="📥 Завантажити JSON", callback_data="download_json")],
-                    [InlineKeyboardButton(text="📥 Завантажити CSV", callback_data="download_csv")],
-                    [InlineKeyboardButton(text="📥 Завантажити Shopify CSV", callback_data="download_shopify")],
-                    [InlineKeyboardButton(text="🔄 Новий парсинг", callback_data="new_parsing")]
-                ])
+        # Зберігаємо дані в state
+        if mode == "single":
+            await state.update_data({
+                'json_data': json.dumps(item_dict, ensure_ascii=False, indent=2),
+                'csv_data': [item_dict],
+                'shopify_data': shopify_info,
+                'item_id': item_id
+            })
+        else:
+            await state.update_data({
+                'json_data': json.dumps(items_data, ensure_ascii=False, indent=2),
+                'csv_data': items_data,
+                'shopify_data': shopify_list,
+                'item_id': 'multiple_result'
+            })
 
-                # Оновлюємо повідомлення з клавіатурою
-                await status_message.edit_text(
-                    "✅ Парсинг завершено! Оберіть формат для завантаження:",
-                    reply_markup=download_keyboard
-                )
-            else:
-                await status_message.edit_text("❌ Не вдалося обробити жодного товару")
+        # Створюємо клавіатуру для завантаження
+        download_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📥 Завантажити JSON", callback_data="download_json")],
+            [InlineKeyboardButton(text="📥 Завантажити CSV", callback_data="download_csv")],
+            [InlineKeyboardButton(text="📥 Завантажити Shopify CSV", callback_data="download_shopify")],
+            [InlineKeyboardButton(text="🔄 Новий парсинг", callback_data="new_parsing")]
+        ])
+
+        await status_message.edit_text(
+            "✅ Парсинг завершено! Оберіть формат для завантаження:",
+            reply_markup=download_keyboard
+        )
 
     except Exception as e:
         logging.error(f"Помилка: {e}")
-        await status_message.edit_text(f"❌ Помилка при парсингу: {str(e)}")
+        await status_message.edit_text(
+            f"❌ Помилка при парсингу: {str(e)}",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔄 Спробувати знову", callback_data="new_parsing")]
+            ])
+        )
 
 @dp.callback_query(lambda c: c.data == "new_parsing")
 async def new_parsing(callback: types.CallbackQuery, state: FSMContext):
