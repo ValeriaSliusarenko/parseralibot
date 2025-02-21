@@ -36,7 +36,9 @@ from data import (
     save_json,
     save_csv,
     save_shopify_csv_one_item,
-    save_shopify_csv_list_items
+    save_shopify_csv_list_items,
+    prepare_csv,
+    prepare_shopify_csv
 )
 from hosting import upload_photos
 
@@ -180,8 +182,8 @@ async def start_parsing_process(message: types.Message, state: FSMContext):
             # Зберігаємо дані в state
             await state.update_data({
                 'json_data': json.dumps(item_dict, ensure_ascii=False, indent=2),
-                'csv_data': pd.DataFrame([item_dict]).to_csv(index=False),
-                'shopify_data': pd.DataFrame(shopify_info).to_csv(index=False),
+                'csv_data': [item_dict],  # Зберігаємо як список словників
+                'shopify_data': shopify_info,  # Зберігаємо як список словників
                 'item_id': item_id
             })
 
@@ -232,8 +234,8 @@ async def start_parsing_process(message: types.Message, state: FSMContext):
                 # Зберігаємо дані
                 await state.update_data({
                     'json_data': json.dumps(items_data, ensure_ascii=False, indent=2),
-                    'csv_data': items_data,  # Зберігаємо оригінальні дані
-                    'shopify_data': all_shopify_items,  # Зберігаємо список словників
+                    'csv_data': items_data,  # Зберігаємо як список словників
+                    'shopify_data': shopify_list,  # Зберігаємо як список словників
                     'item_id': 'query_result'
                 })
 
@@ -286,8 +288,8 @@ async def start_parsing_process(message: types.Message, state: FSMContext):
                 # Зберігаємо дані в state
                 await state.update_data({
                     'json_data': json.dumps(items_data, ensure_ascii=False, indent=2),
-                    'csv_data': pd.DataFrame(items_data).to_csv(index=False),
-                    'shopify_data': pd.DataFrame(shopify_list).to_csv(index=False),
+                    'csv_data': items_data,  # Зберігаємо як список словників
+                    'shopify_data': shopify_list,  # Зберігаємо як список словників
                     'item_id': 'multiple_result'
                 })
 
@@ -322,33 +324,54 @@ async def new_parsing(callback: types.CallbackQuery, state: FSMContext):
 
 @dp.callback_query(lambda c: c.data.startswith("download_"))
 async def process_download(callback: types.CallbackQuery, state: FSMContext):
+    """Обробник завантаження файлів"""
     try:
         data = await state.get_data()
         file_type = callback.data.split("_")[1]
-        item_id = data.get('item_id')
+        item_id = data.get('item_id', 'query_result')
 
         if file_type == "json":
-            file_data = data.get('json_data').encode()
+            # Для JSON використовуємо збережені дані
+            file_content = data.get('json_data', '{}')
+            if isinstance(file_content, (dict, list)):
+                file_content = json.dumps(file_content, ensure_ascii=False, indent=2)
             filename = f"item_{item_id}.json"
             caption = "📄 JSON файл"
+        
         elif file_type == "csv":
-            file_data = data.get('csv_data').encode()
+            # Для CSV конвертуємо дані
+            csv_data = data.get('csv_data', [])
+            file_content = prepare_csv(csv_data)
             filename = f"item_{item_id}.csv"
             caption = "📄 CSV файл"
+        
         elif file_type == "shopify":
-            file_data = data.get('shopify_data').encode()
+            # Для Shopify конвертуємо дані
+            shopify_data = data.get('shopify_data', [])
+            file_content = prepare_shopify_csv(shopify_data)
             filename = f"item_{item_id}_shopify.csv"
             caption = "📄 Shopify CSV файл"
         
+        # Перевіряємо, чи є контент
+        if not file_content:
+            raise ValueError("Порожній вміст файлу")
+
+        # Відправляємо файл
         await callback.message.answer_document(
-            document=types.BufferedInputFile(file_data, filename=filename),
+            document=types.BufferedInputFile(
+                file_content.encode('utf-8'),
+                filename=filename
+            ),
             caption=caption
         )
         await callback.answer("✅ Файл надіслано")
         
     except Exception as e:
         logging.error(f"Помилка завантаження: {e}")
-        await callback.answer("❌ Помилка при завантаженні файлу", show_alert=True)
+        await callback.answer(
+            "❌ Помилка при завантаженні файлу. Спробуйте ще раз",
+            show_alert=True
+        )
 
 @dp.callback_query(lambda c: c.data.startswith("mode_"))
 async def process_mode_selection(callback: types.CallbackQuery, state: FSMContext):
