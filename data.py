@@ -202,7 +202,8 @@ def get_shopify_one_item(items: dict, photos_url: list) -> list[dict]:
     ).strip()
     
     # Отримуємо ціну
-    price = items.get('DiscountPrice') or items.get('OriginalPrice') or 0
+    price = get_range_price(items)
+
     
     # Базовий шаблон для першого рядка з усіма даними
     main_row = {
