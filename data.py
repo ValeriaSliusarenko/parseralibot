@@ -8,89 +8,75 @@ import pandas as pd
 
 
 def get_range_price(items: dict) -> float:
-    """Повертає середнє значення від діапазону цін"""
+    """
+    Повертає середнє значення між мінімальною ціною зі знижкою та максимальною оригінальною ціною.
+    Якщо якісь дані відсутні, використовує наявні значення.
+    """
     try:
         # Отримуємо ціни зі знижкою та оригінальні
         discount_price = items.get("DiscountPrice", None)
         original_price = items.get("OriginalPrice", None)
         
-        def convert_to_float_list(price) -> list[float]:
-            """Конвертує ціну будь-якого типу в список чисел"""
-            if price is None:
+        def extract_numbers(price_str: str) -> list[float]:
+            """Витягує всі числа з рядка, використовуючи регулярні вирази"""
+            if not price_str:
                 return []
+            # Знаходимо всі числа (цілі та дробові)
+            numbers = re.findall(r'\d+\.?\d*', str(price_str))
+            return [float(num) for num in numbers if num]
+
+        def get_price_range(price_value) -> tuple[float, float]:
+            """Повертає мінімальну та максимальну ціну з будь-якого формату даних"""
+            if price_value is None:
+                return None, None
                 
-            # Якщо це вже число
-            if isinstance(price, (int, float)):
-                return [float(price)]
+            # Якщо це число
+            if isinstance(price_value, (int, float)):
+                return float(price_value), float(price_value)
                 
             # Якщо це список/кортеж
-            if isinstance(price, (list, tuple)):
-                result = []
-                for p in price:
-                    if isinstance(p, (int, float)):
-                        result.append(float(p))
-                    elif isinstance(p, str):
-                        try:
-                            result.append(float(p.strip()))
-                        except ValueError:
-                            continue
-                return result
+            if isinstance(price_value, (list, tuple)):
+                numbers = []
+                for p in price_value:
+                    numbers.extend(extract_numbers(str(p)))
+                if numbers:
+                    return min(numbers), max(numbers)
+                return None, None
                 
             # Якщо це рядок
-            if isinstance(price, str):
-                # Спробуємо розділити за різними роздільниками
-                for separator in [" - ", ",", ";", "|"]:
-                    if separator in price:
-                        try:
-                            return [float(p.strip()) for p in price.split(separator) if p.strip()]
-                        except ValueError:
-                            continue
-                # Якщо немає роздільників, спробуємо конвертувати як одне число
-                try:
-                    return [float(price.strip())]
-                except ValueError:
-                    return []
-                    
-            return []
-        
-        # Отримуємо списки цін
-        discount_prices = convert_to_float_list(discount_price)
-        original_prices = convert_to_float_list(original_price)
-        
-        # Використовуємо ціни зі знижкою, якщо вони є
-        if discount_prices:
-            return sum(discount_prices) / len(discount_prices)
-            
-        # Інакше використовуємо оригінальні ціни
-        if original_prices:
-            return sum(original_prices) / len(original_prices)
-            
-        # Якщо взагалі немає цін, повертаємо оригінальну ціну або ціну зі знижкою як є
-        if discount_price is not None:
-            try:
-                return float(str(discount_price).strip())
-            except (ValueError, TypeError):
-                pass
+            if isinstance(price_value, str):
+                numbers = extract_numbers(price_value)
+                if numbers:
+                    return min(numbers), max(numbers)
+                return None, None
                 
-        if original_price is not None:
-            try:
-                return float(str(original_price).strip())
-            except (ValueError, TypeError):
-                pass
-        
-        return 0.0  # повертаємо 0 тільки якщо взагалі немає цін
-        
+            return None, None
+
+        # Отримуємо діапазони цін
+        discount_min, discount_max = get_price_range(discount_price)
+        original_min, original_max = get_price_range(original_price)
+
+        # Визначаємо фінальні значення для розрахунку середньої ціни
+        min_price = discount_min if discount_min is not None else (original_min if original_min is not None else None)
+        max_price = original_max if original_max is not None else (discount_max if discount_max is not None else None)
+
+        # Якщо є обидва значення, повертаємо середнє
+        if min_price is not None and max_price is not None:
+            return (min_price + max_price) / 2
+            
+        # Якщо є тільки одне значення
+        if min_price is not None:
+            return min_price
+        if max_price is not None:
+            return max_price
+            
+        # Якщо немає жодного значення, повертаємо 0
+        return 0.0
+
     except Exception as e:
         print(f"Помилка при обчисленні ціни: {e}")
-        # Якщо сталася помилка, спробуємо повернути хоч якусь ціну
-        try:
-            if discount_price is not None:
-                return float(str(discount_price).strip())
-            if original_price is not None:
-                return float(str(original_price).strip())
-        except:
-            pass
         return 0.0
+
 
 
 def get_item_info(item_data: tuple) -> dict:
