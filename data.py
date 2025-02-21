@@ -192,9 +192,28 @@ def get_shopify_one_item(items: dict, photos_url: list[str]) -> list[dict]:
         "Image Src": photos_url[0] if photos_url else "",
         "Image Position": "1",
         "Image Alt Text": "",
-        "Gift Card": "FALSE",
+        "Gift Card": "",
         "SEO Title": "",
         "SEO Description": "",
+        "Google Shopping / Google Product Category": "",
+        "Google Shopping / Gender": "",
+        "Google Shopping / Age Group": "",
+        "Google Shopping / MPN": "",
+        "Google Shopping / AdWords Grouping": "",
+        "Google Shopping / AdWords Labels": "",
+        "Google Shopping / Condition": "",
+        "Google Shopping / Custom Product": "",
+        "Google Shopping / Custom Label 0": "",
+        "Google Shopping / Custom Label 1": "",
+        "Google Shopping / Custom Label 2": "",
+        "Google Shopping / Custom Label 3": "",
+        "Google Shopping / Custom Label 4": "",
+        "Variant Image": "",
+        "Variant Weight Unit": "",
+        "Variant Tax Code": "",
+        "Cost per item": "",
+        "Price / International": "",
+        "Compare At Price / International": "",
         "Status": "draft"
     }
     
@@ -279,13 +298,53 @@ def prepare_json(data: dict | list) -> str:
 
 def prepare_csv(data: dict | list) -> str:
     """Готує CSV дані для відправки."""
-    if isinstance(data, dict):
-        data = [data]
-    return pd.DataFrame(data).to_csv(index=False)
+    try:
+        if isinstance(data, dict):
+            data = [data]
+        
+        # Конвертуємо списки в рядки для фото
+        for item in data:
+            if isinstance(item.get("MainPhotoLinks"), list):
+                item["MainPhotoLinks"] = ",".join(item["MainPhotoLinks"])
+            if isinstance(item.get("ReviewsPhotoLinks"), list):
+                item["ReviewsPhotoLinks"] = ",".join(item["ReviewsPhotoLinks"])
+            if isinstance(item.get("HostingFolderLink"), list):
+                item["HostingFolderLink"] = ",".join(item["HostingFolderLink"])
+        
+        return pd.DataFrame(data).to_csv(index=False, encoding='utf-8')
+    except Exception as e:
+        print(f"Помилка при підготовці CSV: {e}")
+        return ""
 
 
 def prepare_shopify_csv(items: list[dict] | dict) -> str:
     """Готує Shopify CSV дані для відправки."""
-    if isinstance(items, dict):
-        items = [items]
-    return pd.DataFrame(items).to_csv(index=False)
+    try:
+        if isinstance(items, dict):
+            items = [items]
+        elif isinstance(items, list) and all(isinstance(i, list) for i in items):
+            # Якщо це список списків словників, об'єднуємо їх з правильними Handle
+            processed_items = []
+            count = 1
+            for product_items in items:
+                for item in product_items:
+                    item = item.copy()  # Створюємо копію щоб не змінювати оригінал
+                    item["Handle"] = str(count)
+                    processed_items.append(item)
+                count += 1
+            items = processed_items
+        else:
+            # Якщо це простий список словників для одного товару
+            for item in items:
+                item = item.copy()
+                item["Handle"] = "1"
+        
+        # Створюємо DataFrame і зберігаємо як CSV
+        df = pd.DataFrame(items)
+        # Переконуємося що Handle перший у колонках
+        cols = ['Handle'] + [col for col in df.columns if col != 'Handle']
+        df = df[cols]
+        return df.to_csv(index=False, encoding='utf-8')
+    except Exception as e:
+        print(f"Помилка при підготовці Shopify CSV: {e}")
+        return ""
