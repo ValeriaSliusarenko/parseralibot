@@ -1,0 +1,3 @@
+[console_scripts]
+iop = iop.runner.main:main
+

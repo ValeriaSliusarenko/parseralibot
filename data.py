@@ -14,82 +14,29 @@ def get_range_price(items: dict) -> float:
         discount_price = items.get("DiscountPrice", None)
         original_price = items.get("OriginalPrice", None)
         
-        def convert_to_float_list(price) -> list[float]:
-            """Конвертує ціну будь-якого типу в список чисел"""
-            if price is None:
-                return []
-                
-            # Якщо це вже число
-            if isinstance(price, (int, float)):
-                return [float(price)]
-                
-            # Якщо це список/кортеж
-            if isinstance(price, (list, tuple)):
-                result = []
-                for p in price:
-                    if isinstance(p, (int, float)):
-                        result.append(float(p))
-                    elif isinstance(p, str):
-                        try:
-                            result.append(float(p.strip()))
-                        except ValueError:
-                            continue
-                return result
-                
-            # Якщо це рядок
-            if isinstance(price, str):
-                # Спробуємо розділити за різними роздільниками
-                for separator in [" - ", ",", ";", "|"]:
-                    if separator in price:
-                        try:
-                            return [float(p.strip()) for p in price.split(separator) if p.strip()]
-                        except ValueError:
-                            continue
-                # Якщо немає роздільників, спробуємо конвертувати як одне число
-                try:
-                    return [float(price.strip())]
-                except ValueError:
-                    return []
-                    
-            return []
-        
-        # Отримуємо списки цін
-        discount_prices = convert_to_float_list(discount_price)
-        original_prices = convert_to_float_list(original_price)
-        
-        # Використовуємо ціни зі знижкою, якщо вони є
-        if discount_prices:
-            return sum(discount_prices) / len(discount_prices)
-            
-        # Інакше використовуємо оригінальні ціни
-        if original_prices:
-            return sum(original_prices) / len(original_prices)
-            
-        # Якщо взагалі немає цін, повертаємо оригінальну ціну або ціну зі знижкою як є
-        if discount_price is not None:
+        def extract_number(price_str: str) -> float:
+            """Витягує число з рядка ціни"""
+            if not price_str:
+                return 0.0
             try:
-                return float(str(discount_price).strip())
-            except (ValueError, TypeError):
-                pass
-                
-        if original_price is not None:
-            try:
-                return float(str(original_price).strip())
-            except (ValueError, TypeError):
-                pass
-        
-        return 0.0  # повертаємо 0 тільки якщо взагалі немає цін
+                # Видаляємо всі нечислові символи крім крапки та цифр
+                clean_str = ''.join(c for c in str(price_str) if c.isdigit() or c == '.')
+                return float(clean_str) if clean_str else 0.0
+            except ValueError:
+                return 0.0
+
+        # Спочатку перевіряємо ціну зі знижкою
+        if discount_price:
+            return extract_number(discount_price)
+            
+        # Якщо немає ціни зі знижкою, використовуємо оригінальну
+        if original_price:
+            return extract_number(original_price)
+            
+        return 0.0
         
     except Exception as e:
         print(f"Помилка при обчисленні ціни: {e}")
-        # Якщо сталася помилка, спробуємо повернути хоч якусь ціну
-        try:
-            if discount_price is not None:
-                return float(str(discount_price).strip())
-            if original_price is not None:
-                return float(str(original_price).strip())
-        except:
-            pass
         return 0.0
 
 
@@ -201,15 +148,14 @@ def get_shopify_one_item(items: dict, photos_url: list) -> list[dict]:
         f"{items.get('Description', '')}"
     ).strip()
     
-    # Отримуємо ціну
+    # Отримуємо ціну як одне число
     price = get_range_price(items)
-
     
     # Базовий шаблон для першого рядка з усіма даними
     main_row = {
         "Handle": "1",
         "Title": items.get("Title", ""),
-        "Body (HTML)": body_html,  # Тепер містить і специфікації, і опис
+        "Body (HTML)": body_html,
         "Vendor": "",
         "Product Category": "Uncategorized",
         "Type": "",
@@ -227,7 +173,7 @@ def get_shopify_one_item(items: dict, photos_url: list) -> list[dict]:
         "Variant Inventory Qty": "100",
         "Variant Inventory Policy": "continue",
         "Variant Fulfillment Service": "manual",
-        "Variant Price": str(price),
+        "Variant Price": str(price),  # Тепер тут буде одне число
         "Variant Compare At Price": "",
         "Variant Requires Shipping": "",
         "Variant Taxable": "",

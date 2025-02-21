@@ -1,0 +1,22 @@
+Metadata-Version: 2.0
+Name: iop
+Version: 0.0.4
+Summary: Input-Output processing: Apache Camel on python
+Home-page: https://github.com/reddec/iop
+Author: Baryshnikov Alexander
+Author-email: dev@baryshnikov.net
+License: MIT
+Keywords: camel iop
+Platform: UNKNOWN
+Classifier: Development Status :: 2 - Pre-Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Topic :: Internet
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3.6
+Requires-Dist: aioimaplib (>=0.7.11)
+Requires-Dist: jinja2 (>=2.9.0)
+Requires-Dist: setuptools (>=30)
+
+Very simple implementation of Apache Camel in python
+
+
