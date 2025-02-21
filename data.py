@@ -6,6 +6,9 @@ from html import unescape
 import logging
 import pandas as pd
 
+# Налаштування логування
+logger = logging.getLogger(__name__)
+
 
 def get_range_price(items: dict) -> float:
     """Повертає середнє значення між мінімальною ціною зі знижкою та максимальною оригінальною ціною"""
@@ -55,90 +58,94 @@ def get_range_price(items: dict) -> float:
 
 
 def get_item_info(item_data: tuple) -> dict:
-    """
-    Повертає інформацію про товар у вигляді словника.
-    Об'єднує дані (опис, специфікації, ціни, фото, інші дані) із API.
-    
-    **Основні ціни для головного товару (які бачить користувач) визначаються за першим SKU:**
-      - Якщо значення 'price' містить роздільник "-", то:
-            NewPrice (DiscountPrice) = перша частина (мінімальна ціна)
-            OldPrice (OriginalPrice) = друга частина (максимальна ціна)
-      - Якщо роздільника немає:
-            NewPrice (DiscountPrice) = значення з 'promotionPrice', якщо воно задане (не None і не пусте), інакше – значення 'price'
-            OldPrice (OriginalPrice) = значення 'price'
-    
-    Додатково формується поле "SKUPriceRange" як рядок із діапазоном цін по всім варіантам.
-    """
-    item, reviews = item_data
-    product_id = item["result"]['item']['itemId']
-    
-    # Формування специфікацій
-    specs = item["result"]["item"]["properties"]["list"]
-    specs_info = "\n".join(f"{spec['name']}: {spec['value']}" for spec in specs) if specs else ""
-    
-    # Отримання фото з відгуків
-    reviews_photo = []
-    
+    """Повертає інформацію про товар у вигляді словника."""
     try:
-        delivery_note = item["result"]["delivery"]["shippingList"][0]['note']
+        item, reviews = item_data
+        product_id = item["result"]['item']['itemId']
+        
+        # Формування специфікацій
+        specs = item["result"]["item"]["properties"].get("list", [])
+        specs_info = "\n".join(f"{spec['name']}: {spec['value']}" for spec in specs) if specs else ""
+        
+        # Отримання фото з відгуків
+        reviews_photo_links = []
+        if reviews is not None:  # Додана перевірка на None
+            try:
+                if isinstance(reviews, dict) and 'result' in reviews:
+                    for review in reviews.get('result', {}).get("resultList", []):
+                        if isinstance(review, dict) and 'review' in review:
+                            imgs = review['review'].get("reviewImages", [])
+                            if imgs:
+                                reviews_photo_links.extend([f"https:{img}" for img in imgs])
+            except Exception as e:
+                logger.error(f"Помилка при отриманні фото відгуків: {e}")
+        
+        # Отримання основних фото
+        main_photo_links = []
+        try:
+            description_obj = item["result"]["item"].get("description", {})
+            if description_obj and "images" in description_obj and description_obj["images"]:
+                main_photo_links = [f"https:{image}" for image in description_obj["images"]]
+            elif "images" in item["result"]["item"] and item["result"]["item"]["images"]:
+                main_photo_links = [f"https:{image}" for image in item["result"]["item"]["images"]]
+        except Exception as e:
+            logger.error(f"Помилка при отриманні основних фото: {e}")
+        
+        # Формуємо правильні посилання для Cloudinary
+        cloud_name = os.getenv('CLOUD_NAME')
+        hosting_folder_links = [
+            f"https://res.cloudinary.com/{cloud_name}/{product_id}/MainPhotos",
+            f"https://res.cloudinary.com/{cloud_name}/{product_id}/PhotoReviews"
+        ]
+        
+        return {
+            "Link": f"https:{item['result']['item']['itemUrl']}",
+            "Title": item["result"]["item"]["title"],
+            "DiscountPrice": item.get('result', {}).get("item", {}).get("sku", {}).get("def", {}).get("promotionPrice", ""),
+            "OriginalPrice": item.get('result', {}).get("item", {}).get("sku", {}).get("def", {}).get("price", ""),
+            "Rating": float(item["result"]["reviews"]["averageStar"]),
+            "Likes": item["result"]["item"]["wishCount"],
+            "MainDeliveryOption": get_delivery_option(item),
+            "Description": get_description(item),
+            "Specifications": specs_info,
+            "MainPhotoLinks": main_photo_links,
+            "ReviewsPhotoLinks": reviews_photo_links,
+            "HostingFolderLink": hosting_folder_links,
+            "CloudinaryFolders": hosting_folder_links
+        }
+        
+    except Exception as e:
+        logger.error(f"Помилка при обробці даних товару: {e}")
+        return None
+
+
+def get_delivery_option(item: dict) -> str:
+    """Отримує інформацію про доставку."""
+    try:
+        delivery_note = item.get("result", {}).get("delivery", {}).get("shippingList", [{}])[0].get('note', [])
         if delivery_note and len(delivery_note) >= 2:
-            main_delivery_option = f"{delivery_note[0]}\nDelivery: {delivery_note[1]}"
-        else:
-            main_delivery_option = ""
+            return f"{delivery_note[0]}\nDelivery: {delivery_note[1]}"
+        return ""
     except Exception:
-        main_delivery_option = ''
-    
-    # Отримання фото з опису: беремо список з ключа "images" у "description"
-    description_obj = item["result"]["item"]["description"]
-    # Перший варіант: фото із description (якщо є)
-    if "images" in description_obj and description_obj["images"]:
-        main_photo_links = ["https:" + image for image in description_obj["images"]]
-    else:
-        # Резервний варіант: спробуємо отримати фото з іншого місця, наприклад з основного поля товару
-        if "images" in item["result"]["item"] and item["result"]["item"]["images"]:
-            main_photo_links = ["https:" + image for image in item["result"]["item"]["images"]]
-    
-    # Отримання фото відгуків
-    reviews_photo_links = ["https:" + image for image in reviews_photo]
-    
-    # Отримання текстового опису: спочатку ключ "text", інакше очищення HTML з "html"
-    description_text = description_obj.get("text", "").strip()
-    if not description_text:
-        raw_html = description_obj.get("html", "")
-        description_text = re.sub(r'<[^>]*>', '', raw_html).strip()
-    
-    # Видалення небажаних фрагментів із опису
-    description_text = re.sub(r'window\.adminAccountId=\d+;', '', description_text)
-    description_text = re.sub(r'with\(document\).*?src="[^"]+"', '', description_text, flags=re.DOTALL)
-    description_text = re.sub(r'&bull;', '', description_text)
-    description_text = re.sub(r'\s+', ' ', description_text).strip()
-    description_text = unescape(description_text)
-    
-    if not description_text:
-        description_text = ""
-    else:
-        description_text = description_text
-    
-    original_price = item.get('result', {}).get("item", {}).get("sku", {}).get("def", {}).get("price", "")
-    discount_price = item.get('result', {}).get("item", {}).get("sku", {}).get("def", {}).get("promotionPrice", "")
-    
-    return {
-        "Link": "https:" + item["result"]["item"]["itemUrl"],
-        "Title": item["result"]["item"]["title"],
-        "DiscountPrice": discount_price if discount_price else "",
-        "OriginalPrice": original_price if original_price else "",
-        "Rating": float(item["result"]["reviews"]["averageStar"]),
-        "Likes": item["result"]["item"]["wishCount"],
-        "MainDeliveryOption": main_delivery_option,
-        "Description": description_text,
-        "Specifications": specs_info,
-        "MainPhotoLinks": main_photo_links,
-        "ReviewsPhotoLinks": reviews_photo_links,
-        "HostingFolderLink": [
-            f"https://res.cloudinary.com/dnghh41px/{product_id}/MainPhotos",
-            f"https://res.cloudinary.com/dnghh41px/{product_id}/PhotoReview"
-        ],
-    }
+        return ""
+
+
+def get_description(item: dict) -> str:
+    """Отримує опис товару."""
+    try:
+        description_obj = item.get("result", {}).get("item", {}).get("description", {})
+        description_text = description_obj.get("text", "").strip()
+        if not description_text:
+            raw_html = description_obj.get("html", "")
+            description_text = re.sub(r'<[^>]*>', '', raw_html).strip()
+        
+        description_text = re.sub(r'window\.adminAccountId=\d+;', '', description_text)
+        description_text = re.sub(r'with\(document\).*?src="[^"]+"', '', description_text, flags=re.DOTALL)
+        description_text = re.sub(r'&bull;', '', description_text)
+        description_text = re.sub(r'\s+', ' ', description_text).strip()
+        return unescape(description_text)
+    except Exception:
+        return ""
 
 
 def get_items_list_from_query(query_data: dict) -> list:
@@ -348,4 +355,3 @@ def prepare_shopify_csv(items: list[dict] | dict) -> str:
     except Exception as e:
         print(f"Помилка при підготовці Shopify CSV: {e}")
         return ""
-
