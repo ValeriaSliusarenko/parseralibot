@@ -111,7 +111,7 @@ def get_item_info(item_data: tuple) -> dict:
             "MainPhotoLinks": main_photo_links,
             "ReviewsPhotoLinks": reviews_photo_links,
             "HostingFolderLink": hosting_folder_links,
-            "CloudinaryFolders": hosting_folder_links
+            
         }
         
     except Exception as e:
